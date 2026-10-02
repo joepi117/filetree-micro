@@ -1,0 +1,15 @@
+[{
+  "Name": "filetree",
+  "Description": "Adds a filetree panel to the micro text editor",
+  "Website": "https://github.com/user/plugin",
+  "Tags": ["filetree"],
+  "Versions": [
+    {
+      "Version": "1.0.0",
+      "Url": "https://github.com/user/plugin/archive/v1.0.0.zip",
+      "Require": {
+        "micro": ">= 2.0.15"
+      }
+    }
+  ]
+}]
