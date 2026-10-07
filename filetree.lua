@@ -12,6 +12,84 @@ local tree_view = nil
 local line_to_path = {}
 local current_dir = ""
 
+
+-- Visual helpers
+local ICONS = {
+	-- languages
+	cpp = "󰙲",
+	c = "󰙱",
+	cs = "󰌛",
+	python = "",
+	java = "",
+	kotlin = "",
+	js = "",
+	ts = "",
+	react = "󰜈",
+	go = "󰟓",
+	rust = "",
+	swift = "",
+	ruby = "",
+	php = "",
+	lua = "",
+	shell = "",
+	sql = "",
+	assembly = "",
+
+	-- web
+	html = "",
+	css = "",
+
+	-- data structures
+	json = "",
+	yaml = "",
+
+	-- other
+	folder = "",
+	back = "󰘌"
+}
+
+local LPAD = "  "
+local SPAD = " "
+
+local function select_line()
+	tree_view.Cursor:Deselect(true)
+	tree_view.Cursor:SelectLine()
+end
+
+-- Places the cursor at the top of the listing, under ".."
+local function move_cursor_top()
+	tree_view.Cursor:Deselect(true)
+	tree_view.Cursor:GotoLoc(buffer.Loc(0, 1))
+	tree_view:Relocate()
+	select_line()
+end
+
+function onCursorDown(bp)
+	if bp == tree_view then
+		select_line()
+	end
+end
+
+function onCursorUp(bp)
+	if bp == tree_view then
+		select_line()
+	end
+end
+
+-- Block the cursor from moving right
+function preCursorRight(bp)
+	if bp == tree_view then
+		return false
+	end
+end
+
+-- Block the cursor from moving left
+function preCursorLeft(bp)
+	if bp == tree_view then
+		return false
+	end
+end
+
 -- Returns a listing of everything in the current working directory
 local function build_listing(dir)
 	line_to_path = {}
@@ -23,10 +101,12 @@ local function build_listing(dir)
 		return ""
 	end
 
+	table.insert(lines, SPAD .. ICONS.back)
+
 	for i = 1, #entries do
 		local e = entries[i]
 		if e:isDir() then
-			table.insert(lines, e:Name() .. "/")
+			table.insert(lines, LPAD .. ICONS.folder .. " " ..  e:Name() .. "/")
 			table.insert(line_to_path, filepath.Join(dir, e:Name()))
 		end
 	end
@@ -34,7 +114,7 @@ local function build_listing(dir)
 	for i = 1, #entries do
 		local e = entries[i]
 		if not e:isDir() then
-			table.insert(lines, e:Name())
+			table.insert(lines, LPAD .. e:Name())
 			table.insert(line_to_path, filepath.Join(dir, e:Name()))
 		end
 	end
@@ -52,11 +132,13 @@ local function is_dir(path)
 	end
 end
 
+-- Render the contents of the specified directory
 function render(dir)
-	current_dir = dir
-	local text = build_listing(dir)
+	current_dir = filepath.Clean(dir)
+	local text = build_listing(current_dir)
 	tree_view.Buf.EventHandler:Remove(tree_view.Buf:Start(), tree_view.Buf:End())
 	tree_view.Buf.EventHandler:Insert(buffer.Loc(0, 0), text)
+	move_cursor_top()
 end
 
 -- Open item at the selected position
@@ -66,7 +148,13 @@ function open_selected(bp)
 		return
 	end
 
-	local path = line_to_path[bp.Cursor.Loc.Y + 1]
+	local path = ""
+
+	if bp.Cursor.Loc.Y == 0 then
+		path = filepath.Dir(current_dir)
+	else
+		path = line_to_path[bp.Cursor.Loc.Y]
+	end
 	
 	if path == nil then
 		return
@@ -83,18 +171,19 @@ end
 
 -- Opens the filetree
 function open_filetree(bp)
-	local cwd = os.Getwd()
-	local text = build_listing(cwd)
-	
-	local buf = buffer.NewBuffer(text, "filetree")
-
-	tree_view = bp:VSplitIndex(buf, false)
+	tree_view = bp:VSplitIndex(buffer.NewBuffer("", "filetree"), false)
 
 	tree_view.Buf:SetOptionNative("softwrap", false)
 	tree_view.Buf:SetOptionNative("ruler", false)
 	tree_view.Buf:SetOptionNative("scrollbar", false)
+	tree_view.Buf:SetOptionNative("autosave", false)
+	tree_view.Buf:SetOptionNative("statusformatr", "")
+	tree_view.Buf:SetOptionNative("statusformatl", "filetree")
 	tree_view.Buf.Type.Readonly = true
+	tree_view.Buf.Type.Scratch = true
 	tree_view:ResizePane(30)
+
+	render(os.Getwd())
 end
 
 -- Closes the filetree
@@ -117,4 +206,11 @@ end
 function init()
 	config.MakeCommand("filetree", toggle_filetree, config.NoComplete)
 	config.TryBindKey("Enter", "lua:filetree.open_selected", true)
+end
+
+function postinit()
+	local pane = micro.CurPane()
+	if pane ~= nil then
+		toggle_filetree(pane)
+	end
 end
